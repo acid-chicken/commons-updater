@@ -1,0 +1,27 @@
+---
+format_version: '6'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: other
+trigger_map:
+- push_branch: "*"
+  workflow: primary
+- pull_request_source_branch: "*"
+  workflow: primary
+workflows:
+  primary:
+    steps:
+    - activate-ssh-key:
+        run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+    - git-clone: {}
+    - script:
+        title: Build Projects
+        inputs:
+        - content: |
+            #!/usr/bin/env bash
+            set -e
+            set -x
+            export CppCompilerAndLinker=clang
+            export DOTNET_SKIP_FIRST_TIME_EXPERIENCE=true
+            export NUGET_XMLDOC_MODE=skip
+            dotnet publish -r osx-x64 -c Release -o $BITRISE_DEPLOY_DIR --version-suffix "osx-$BITRISE_BUILD_NUMBER"
+    - deploy-to-bitrise-io: {}

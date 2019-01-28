@@ -1,0 +1,23 @@
+version: 1.0.0-win-{build}
+image: Visual Studio 2017
+configuration: Release
+platform: x64
+dotnet_csproj:
+  patch: true
+  file: '**\*.csproj'
+  version: '{version}'
+  package_version: '{version}'
+  assembly_version: '{version}'
+  file_version: '{version}'
+  informational_version: '{version}'
+environment:
+  CppCompilerAndLinker: clang
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  NUGET_XMLDOC_MODE: skip
+  NUGET_PACKAGES: 'C:\projects\commons-updater\packages'
+cache:
+  - 'packages'
+build_script:
+- pwsh: dotnet publish -c Release -r win-x64 -o dist
+artifacts:
+- path: 'src\CommonsUpdater\dist\'

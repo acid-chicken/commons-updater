@@ -1,0 +1,47 @@
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: 346design/dotnet.corert
+        environment:
+          CppCompilerAndLinker: clang
+          DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+          NUGET_XMLDOC_MODE: skip
+    steps:
+      - checkout
+      - run:
+          name: Checking Hashes
+          command: |
+            dotnet --version > DOTNET_SDK_VERSION
+            zsh -c 'grep PackageReference **/*.csproj' > NUGET_PACKAGE_REFERENCES
+      - restore_cache:
+          keys:
+            - nuget-v1-arch-{{ arch }}-env-{{ .Environment.variableName }}-sdk-{{ checksum "DOTNET_SDK_VERSION" }}-nuget-{{ checksum "NUGET_PACKAGE_REFERENCES" }}-
+            - nuget-v1-arch-{{ arch }}-env-{{ .Environment.variableName }}-sdk-{{ checksum "DOTNET_SDK_VERSION" }}-
+            - nuget-v1-arch-{{ arch }}-env-{{ .Environment.variableName }}-
+            - nuget-v1-arch-{{ arch }}-env-
+            - nuget-v1-
+      - run:
+          name: Restoring NuGet Packages
+          command: |
+            dotnet restore
+      - run:
+          name: Building Project
+          command: |
+            dotnet publish -r linux-x64 -c Release -o dist --version-suffix "linux-$CIRCLE_BUILD_NUM"
+      - run:
+          name: Checking Hashes
+          command: |
+            ls -alR ~/.nuget/packages > NUGET_PACKAGES
+      - save_cache:
+          key: nuget-v1-arch-{{ arch }}-env-{{ .Environment.variableName }}-sdk-{{ checksum "DOTNET_SDK_VERSION" }}-nuget-{{ checksum "NUGET_PACKAGE_REFERENCES" }}-{{ checksum "NUGET_PACKAGES" }}
+          paths:
+            - ~/.nuget/packages
+      - store_artifacts:
+          path: src/CommonsUpdater/dist
+workflows:
+  version: 2
+  build:
+    jobs:
+      - build
