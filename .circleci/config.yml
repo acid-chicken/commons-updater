@@ -30,6 +30,7 @@ jobs:
           name: Building Project
           command: |
             dotnet publish -r linux-x64 -c Release -o dist --version-suffix "linux-$CIRCLE_BUILD_NUM"
+            tar -jcvf linux-x64.tar.bz2 src/CommonsUpdater/dist
       - run:
           name: Checking Hashes
           command: |
