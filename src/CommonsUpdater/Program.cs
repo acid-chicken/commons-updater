@@ -27,9 +27,9 @@ namespace AcidChicken.CommonsUpdater
 
             var target = await GetTargetAsync();
 
-            var list = await GetListAsync();
+            var list = await GetListsAsync(target.Id);
 
-            await UpdateAsync(target.Id, list.Select(x => x.Id).ToArray());
+            await UpdateAsync(target.Id, list.Select(x => x.Id).Distinct().ToArray());
 
             ReadKey(true);
         }
@@ -70,6 +70,47 @@ namespace AcidChicken.CommonsUpdater
                 else
                     WriteMessage("IDの書式が間違っています。余分な文字が入っていないかを確認してもう一度入力して下さい。", WriteType.Failure);
             }
+        }
+
+        static async Task<IEnumerable<ContentInfo>> GetListsAsync(string id)
+        {
+            var list = new List<ContentInfo>();
+
+            async Task<bool> StillAddingAsync()
+            {
+                WriteMessage("続行しますか？", WriteType.Select);
+
+                switch (ReadChoice("リストを確認", "追加でリストに追加", "付け足して保存", "上書き保存"))
+                {
+                    case 0:
+                    {
+                        WriteMessage("リストには現在以下の作品が登録されています。");
+
+                        foreach (var item in list)
+                            WriteMessage(item.ToString(), WriteType.Memo);
+
+                        return await StillAddingAsync();
+                    }
+                    case 1:
+                        return true;
+                    case 2:
+                    {
+                        list.AddRange(await CheckTreeAsync(id));
+
+                        return false;
+                    }
+                    case 3:
+                        return false;
+                    default:
+                        return await StillAddingAsync();
+                }
+            }
+
+            do
+                list.AddRange(await GetListAsync());
+            while (await StillAddingAsync());
+
+            return list.Distinct();
         }
 
         static async Task<IEnumerable<ContentInfo>> GetListAsync()

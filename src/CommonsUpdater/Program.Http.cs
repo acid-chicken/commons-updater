@@ -46,6 +46,8 @@ namespace AcidChicken.CommonsUpdater
         {
             try
             {
+                WriteMessage("認証情報を確認しています。");
+
                 using (var response = await _http.GetAsync("https://public.api.nicovideo.jp/v1/user/followees/niconico-users/51391221.json"))
                 switch (response.StatusCode)
                 {
@@ -84,11 +86,13 @@ namespace AcidChicken.CommonsUpdater
                                 _handler.CookieContainer.GetCookies(_uri)["user_session_secure"] is Cookie)
                             {
                                 WriteMessage("ログインに成功しました。", WriteType.Success);
+
                                 return true;
                             }
                             else
                             {
                                 WriteMessage("ログインに失敗しました。いずれかのキーを押して再試行します。", WriteType.Failure);
+
                                 return false;
                             }
                 }
@@ -103,6 +107,7 @@ namespace AcidChicken.CommonsUpdater
                 WriteMessage("不明なエラーが発生しました。", WriteType.Error);
                 WriteStack(e);
             }
+
             return false;
         }
 
@@ -155,6 +160,7 @@ namespace AcidChicken.CommonsUpdater
                 })))
                 {
                     var bytes = await response.Content.ReadAsByteArrayAsync();
+
                     return bytes.Length == 0 ? null : new ContentInfo
                     {
                         Id = id,
@@ -180,15 +186,19 @@ namespace AcidChicken.CommonsUpdater
         {
             try
             {
+                WriteMessage("マイリスト一覧を取得しています。");
+
 #if !utf8json
                 using (var stream = await _http.GetStreamAsync("https://www.nicovideo.jp/api/mylistgroup/list"))
                 {
                     var json = await JsonSerializer.DeserializeAsync<MylistGroup>(stream, StandardResolver.SnakeCase);
+
                     return json?.Mylistgroup ?? Array.Empty<Mylist>();
                 }
 #else
                 var raw = await _http.GetStringAsync("https://www.nicovideo.jp/api/mylistgroup/list");
                 var json = JsonConvert.DeserializeObject<MylistGroup>(raw, _settings);
+
                 return json?.Mylistgroup ?? Array.Empty<Mylist>();
 #endif
             }
@@ -210,15 +220,19 @@ namespace AcidChicken.CommonsUpdater
         {
             try
             {
+                WriteMessage("マイリストに登録されたコンテンツを確認しています。");
+
 #if !utf8json
                 using (var stream = await _http.GetStreamAsync($"https://www.nicovideo.jp/api/mylist/list?group_id={id}"))
                 {
                     var json = await JsonSerializer.DeserializeAsync<Mylist>(stream, StandardResolver.SnakeCase);
+
                     return json?.Mylistitem?.Select(x => x.ItemData).Where(x => x.Deleted == "0").ToArray() ?? Array.Empty<ItemData>();
                 }
 #else
                 var raw = await _http.GetStringAsync($"https://www.nicovideo.jp/api/mylist/list?group_id={id}");
                 var json = JsonConvert.DeserializeObject<Mylist>(raw, _settings);
+
                 return json?.Mylistitem?.Select(x => x.ItemData).Where(x => x.Deleted == "0").ToArray() ?? Array.Empty<ItemData>();
 #endif
             }
@@ -240,6 +254,8 @@ namespace AcidChicken.CommonsUpdater
         {
             try
             {
+                WriteMessage("ユーザー情報を確認しています。");
+
                 var response = await _http.GetStringAsync($"https://www.nicovideo.jp/user/{id}");
                 var lines = response.Split('\n').Select(x => x.Trim()).Where(x => x.Length != 0).ToArray();
                 var user = new UserInfo
@@ -282,6 +298,8 @@ namespace AcidChicken.CommonsUpdater
         {
             try
             {
+                WriteMessage("コンテンツツリーを編集しています。");
+
                 var page = await _http.GetStringAsync($"https://commons.nicovideo.jp/tree/edit/{id}");
                 var token = page.Split('\n').Select(x => x.Trim()).Where(x => x.Length != 0).FirstOrDefault(x => x.StartsWith("var token = \""))?.Split('"')[1];
 
@@ -308,9 +326,59 @@ namespace AcidChicken.CommonsUpdater
             }
         }
 
+        static async Task<ContentInfo[]> CheckTreeAsync(string id)
+        {
+            try
+            {
+                WriteMessage("既存の親作品を取得しています。");
+
+#if !utf8json
+                var bytes = await _http.GetByteArrayAsync($"https://api.commons.nicovideo.jp/tree/summary/get?id={id}&callback=_");
+                var json = JsonSerializer.Deserialize<TreeSummary>(bytes.AsSpan(2, bytes.Length - 4).ToArray(), StandardResolver.SnakeCase);
+                var parentBytes = await _http.GetByteArrayAsync($"https://api.commons.nicovideo.jp/tree/summary/get?id={id}&callback=_&limit={json?.Countparent ?? int.MaxValue.ToString()}");
+                var parentJson = JsonSerializer.Deserialize<TreeSummary>(parentBytes.AsSpan(2, parentBytes.Length - 4).ToArray(), StandardResolver.SnakeCase);
+
+                WriteMessage($"既存の親作品として設定されているコンテンツを {parentJson?.Countparent} 個確認しました。", WriteType.Success);
+
+                return parentJson?.Parent?.Select(x => new ContentInfo
+                {
+                    Id = x.Parentid,
+                    Title = x.Title
+                }).ToArray() ?? Array.Empty<ContentInfo>();
+#else
+                var raw = await _http.GetStringAsync($"https://api.commons.nicovideo.jp/tree/summary/get?id={id}&callback=_");
+                var json = JsonConvert.DeserializeObject<TreeSummary>(raw.Substring(2, raw.Length - 4), _settings);
+                var main = await _http.GetStringAsync($"https://api.commons.nicovideo.jp/tree/summary/get?id={id}&callback=_&limit={json?.Countparent ?? int.MaxValue.ToString()}");
+                var response = JsonConvert.DeserializeObject<TreeSummary>(raw.Substring(2, raw.Length - 4), _settings);
+
+                WriteMessage($"既存の親作品として設定されているコンテンツを {parentJson?.Countparent} 個確認しました。", WriteType.Success);
+
+                return response?.Parent?.Select(x => new ContentInfo
+                {
+                    Id = x.Parentid,
+                    Title = x.Title
+                }).ToArray() ?? Array.Empty<ContentInfo>();
+#endif
+            }
+            catch (HttpRequestException e)
+            {
+                WriteMessage("APIの接続に失敗しました。インターネットに接続されていないか、ニコニコ動画がメンテナンス中の可能性があります。", WriteType.Error);
+                WriteStack(e);
+            }
+            catch (Exception e)
+            {
+                WriteMessage("不明なエラーが発生しました。", WriteType.Error);
+                WriteStack(e);
+            }
+
+            return Array.Empty<ContentInfo>();
+        }
+
         static string SetHeaders()
         {
+/*
             _http.DefaultRequestHeaders.Add("x-niconico-authflag", "0");
+ */
 
             var session = _handler.CookieContainer.GetCookies(_uri)["user_session"]?.Value.Split('_');
 
@@ -318,7 +386,9 @@ namespace AcidChicken.CommonsUpdater
             {
                 var id = session[2];
 
+/*
                 _http.DefaultRequestHeaders.Add("x-niconico-id", id);
+ */
 
                 return id;
             }
