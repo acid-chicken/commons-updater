@@ -43,6 +43,11 @@ namespace AcidChicken.CommonsUpdater
             Noexist = 4
         }
 
+        static bool ValidChar(char x) =>
+            '0' <= x && x <= '9' ||
+            'A' <= x && x <= 'Z' ||
+            'a' <= x && x <= 'z';
+
         static async Task<ContentInfo> GetTargetAsync()
         {
             while (true)
@@ -51,10 +56,7 @@ namespace AcidChicken.CommonsUpdater
 
                 var read = ReadLine().Trim();
 
-                if (read.Length != 0 && read.All(x =>
-                    '0' <= x && x <= '9' ||
-                    'A' <= x && x <= 'Z' ||
-                    'a' <= x && x <= 'z'))
+                if (read.Length != 0 && read.All(ValidChar))
                 {
                     var content = await CheckIdAsync(read);
                     if (content is ContentInfo)
@@ -72,11 +74,6 @@ namespace AcidChicken.CommonsUpdater
 
         static async Task<IEnumerable<ContentInfo>> GetListAsync()
         {
-            bool ValidChar(char x) =>
-                '0' <= x && x <= '9' ||
-                'A' <= x && x <= 'Z' ||
-                'a' <= x && x <= 'z';
-
             WriteMessage("親作品の設定方法を選択して下さい。", WriteType.Select);
 
             switch (ReadChoice("手入力で設定", "ファイルから設定", "マイリストから設定", "オリジナル作品として設定"))
